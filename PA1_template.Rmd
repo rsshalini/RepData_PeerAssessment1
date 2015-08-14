@@ -1,25 +1,146 @@
 ---
 title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+output: html_document
 ---
-
 
 ## Loading and preprocessing the data
 
+The activity data in the activity.csv file is read. The data with missing values (NA) are excluded and stored in the variable **activitydata**. The raw data covers a period of 61 days from October 1, 2012 to November 30, 2012.
 
+```{r loadingdata,echo=TRUE}
+activityraw <- read.csv(file="activity.csv",head=TRUE,sep=",")
+activitydata <- activityraw[complete.cases(activityraw),]
+```
 
-## What is mean total number of steps taken per day?
+## Question 1 - What is mean total number of steps taken per day?
+The total number of steps taken per day is calculated across all the intervals per day and stored in the variable **steptotal**. The **steptotal** data consists of 53 rows and 2 columns (date,steps). It can be interpreted that there were missing values for some dates as there are only 53 rows instead of the anticipated 61 dates.
+```{r preparing plot 1,echo=TRUE}
+steptotal <- setNames(aggregate(activitydata$steps~activitydata$date,
+                                data=activitydata,sum),c("date","steps"))
+```
 
+The histogram showing the total number of steps taken each day is plotted.
 
+```{r plot 1,echo=TRUE}
+hist(steptotal$steps,
+     xlab="Total number of steps taken each day",
+     main = "Histogram of total number of steps taken each day")
+```
 
-## What is the average daily activity pattern?
+The mean and median are also calculated.
+```{r, echo=TRUE}
+meanQ1 <- round(mean(steptotal$steps),2)
+medianQ1 <- round(median(steptotal$steps),2)
+```
+The mean and median number of steps is `r meanQ1` and `r medianQ1` respectively.
 
+## Question 2 - What is the average daily activity pattern?
 
+The average number of steps taken every day at a particular interval is calculated using the `aggregate` function. This results in a dataframe of 288 rows and 2 columns (interval, steps).
+```{r preparing plot 2,echo=TRUE}
+averageDailySteps <- aggregate(list(averageSteps=activitydata$steps),
+                               list(interval=activitydata$interval),mean)
+```
 
-## Imputing missing values
+There are 288 time intervals in a day starting from 0 to 2355. This time can be interpreted as the 24h clock format, where 20 means 00:20 am (20 minutes past midnight), 100 means 1:00 am, 1200 means 12 noon and 2355 is 11:55 pm. The x-axis is just left as the interval format in the data.
 
+Here is the time series plot of the average number of steps taken at every 5-minute interval over the period of two months.
 
+```{r plot 2,echo=TRUE}
+with(averageDailySteps,plot(interval,averageSteps,
+                            type="l",xaxt="n",
+                            xlab="Interval",
+                            ylab="Average daily number of steps",
+                            main="Plot of daily average steps for every 5-minute interval"))
+axis(1,at=seq(0,2355,by=100))
+```
 
-## Are there differences in activity patterns between weekdays and weekends?
+```{r maxinterval,echo=TRUE}
+maxinterval <- averageDailySteps$interval[match(max(averageDailySteps$averageSteps),
+                                            averageDailySteps$averageSteps)]
+```
+The 5-minute time interval at which the the average daily steps is maximum occurs at `r maxinterval` (i.e.At 0835 hours).
+
+## Question 3 - Inputting missing values
+The dataset containing the mising values is stored in variable **activityna**.
+```{r nadata, echo=TRUE}
+activityna <- activityraw[!complete.cases(activityraw),]
+nrowsNa <- nrow(activityna)
+```
+The total number of missing values in the dataset are `r nrowsNa`.
+
+The missing data are replaced with the daily average steps data for each interval. This is calculated in Question 2 previously and it is stored in **averageDailySteps** variable. This is merged with the **activityna** data containing the missing data set. The `NA`s in the dataset are replaced with the mean for that interval.
+
+```{r input missing values, echo=TRUE}
+library(dplyr)
+merged <- merge(x=activityna,y=averageDailySteps,by="interval",all.x=TRUE)
+activitynaMod <- data.frame(merged$averageSteps, merged$date,merged$interval)
+colnames(activitynaMod) <- c("steps","date","interval")
+```
+
+A new dataset **activitydataMod** is created using by combining the **activitynaMod** and **activitydata** (referenced in Question 1). Then, it is ordered according to the increasing number of date and interval.
+```{r create new dataset, echo=TRUE}
+activitydataMod <- rbind(activitydata,activitynaMod)
+activitydataMod <- activitydataMod[order(activitydataMod$date,
+                                         activitydataMod$interval),]
+```
+
+The total number of steps taken each day is calculated and stored in **steptotal2** variable and data from this variable will be used to plot the histogram subsequently.
+```{r preparing plot 3, echo=TRUE}
+steptotal2 <- setNames(aggregate(activitydataMod$steps~activitydataMod$date,
+                                 data=activitydataMod,sum),c("date","steps"))
+```
+
+The histogram showing the total number of steps taken each day is plotted.
+```{r plot 3, echo=TRUE}
+hist(steptotal2$steps,
+     xlab="Total steps taken each day",
+     main = "Histogram of total steps taken each day")
+```
+
+The mean and median are also calculated.
+```{r, echo=TRUE}
+meanQ3 <- round(mean(steptotal2$steps),2)
+medianQ3 <- round(median(steptotal2$steps),2)
+```
+The mean and median number of steps is `r meanQ3` and `r medianQ3` respectively.
+
+In comparison with the mean and median in Question1, the mean is the same and the median is increased from `r medianQ1` to `r medianQ3`. The median is now equal to the mean.
+Inputing the missing values resulted in median being equal to the mean and with no changes to the mean number of steps.
+
+## Question 4 - Are there differences in activity patterns between weekdays and weekends?
+
+The date variable in the **activitydataMod** dataset is converted to POSIXct format so that the `weekdays()` function can be used. `weekdays()` function results in weekday names from Monday to Sunday for the respective dates. These were replaced to weekday and weekend.  
+```{r adding day variable, echo=TRUE}
+activitydataQ4 <- mutate(activitydataMod,
+                         day=weekdays(as.POSIXct(activitydataMod$date)))
+
+activitydataQ4$day[which(activitydataQ4$day=="Saturday" |
+                           activitydataQ4$day=="Sunday")] <- "weekend"
+activitydataQ4$day[which(activitydataQ4$day=="Monday" |
+                           activitydataQ4$day=="Tuesday" |
+                           activitydataQ4$day=="Wednesday" |
+                           activitydataQ4$day=="Thursday"|
+                           activitydataQ4$day=="Friday")] <- "weekday"
+```
+The `aggregate` function is used to calculate the average number of steps taken for each interval.
+```{r preparing plot 4, echo=TRUE}
+activitydataQ4$day <-as.factor(activitydataQ4$day)
+averageDailyStepsQ4 <- setNames(
+  aggregate(activitydataQ4$steps,
+            list(activitydataQ4$interval,activitydataQ4$day),mean),
+  c("interval","day","steps"))
+```
+Using the lattice plot system, a panel plot showing a pattern for the number of steps is plotted for weekday and weekend. 
+```{r plot 4,echo=TRUE}
+library(lattice)
+xyplot(steps~interval|day, data = averageDailyStepsQ4,
+       type="l",xlab="Interval as 24h clock format",
+       ylab="Average daily number of steps",
+       main="Average Number of steps taken on weekdays and weekends \nover a period of 61 days",
+       layout=c(1,2))
+```
+
+The maximum value (>200 steps) for the average number of steps taken on a weekday is more than the maximum value  (150-200 steps) for the average number of steps taken on a weekend. This could be attributed to more people going to work on a weekday morning.
+
+However, for a wider amount of interval (between 0500 hrs to 2000 hrs), the average number of steps across the interval is more on a weekend than on a weekday. This could be attributed to more people going out on a weekend and hence, more number of steps is recorded. 
